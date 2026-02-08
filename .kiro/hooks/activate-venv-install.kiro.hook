@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "name": "仮想環境自動アクティベート",
+  "description": "Windows環境でバッチファイルを使用して仮想環境を立ち上げる",
+  "version": "1",
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "cd level-1\\infra & .venv\\Scripts\\Activate.ps1"
+  },
+  "workspaceFolderName": "wio-terminal-aws-connect",
+  "shortName": "activate-venv-install"
+}

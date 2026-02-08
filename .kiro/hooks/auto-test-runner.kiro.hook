@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "テスト自動実行",
+  "description": "test系のコマンドを自動的に実行してユーザーの確認を不要にする",
+  "version": "1",
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "cd level-1\\infra && python -m pytest tests/ -v"
+  }
+}

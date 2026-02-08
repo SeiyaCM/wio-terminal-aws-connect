@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "保存時テスト実行",
+  "description": "Pythonファイルが編集された時に自動的にテストを実行する",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "編集されたPythonファイルに関連するテストを自動実行してください: cd level-1\\\\infra && python -m pytest tests/ -v"
+  }
+}
