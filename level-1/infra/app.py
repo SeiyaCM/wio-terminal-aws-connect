@@ -7,7 +7,7 @@ from infra.infra_stack import InfraStack
 
 
 app = cdk.App()
-InfraStack(app, "wio-terminal-infra-stack",
+InfraStack(app, "attempt-iot-monitoring-stack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.

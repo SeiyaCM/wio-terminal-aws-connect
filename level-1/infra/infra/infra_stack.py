@@ -33,7 +33,7 @@ class InfraStack(Stack):
         # DynamoDB table for time-series data storage
         self.sensor_data_table = dynamodb.Table(
             self, "SensorDataTable",
-            table_name="wio-terminal-sensor-data",
+            table_name="attempt-dynamodb-sensor-data",
             partition_key=dynamodb.Attribute(
                 name="device_id",
                 type=dynamodb.AttributeType.STRING
@@ -52,6 +52,7 @@ class InfraStack(Stack):
         # IAM role for IoT Rule to write to DynamoDB
         self.iot_rule_role = iam.Role(
             self, "IoTRuleRole",
+            role_name="attempt-iam-iot-rule-dynamodb",
             assumed_by=iam.ServicePrincipal("iot.amazonaws.com"),
             description="IAM role for IoT Rule to write sensor data to DynamoDB",
         )
@@ -68,21 +69,21 @@ class InfraStack(Stack):
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                 ],
-                resources=["arn:aws:logs:*:*:log-group:/aws/iot/rule/WioTerminalSensorDataRule/*"]
+                resources=["arn:aws:logs:*:*:log-group:/aws/iot/rule/attempt-iot-rule-sensor-data/*"]
             )
         )
 
         # CloudWatch Log Group for IoT Rule errors
         self.iot_rule_log_group = logs.LogGroup(
             self, "IoTRuleLogGroup",
-            log_group_name="/aws/iot/rule/WioTerminalSensorDataRule/errors",
+            log_group_name="/aws/iot/rule/attempt-iot-rule-sensor-data/errors",
             removal_policy=RemovalPolicy.DESTROY
         )
 
         # IoT Rule for processing sensor data and writing to DynamoDB
         self.sensor_data_rule = iot.CfnTopicRule(
             self, "SensorDataRule",
-            rule_name="WioTerminalSensorDataRule",
+            rule_name="attempt_iot_rule_sensor_data",
             topic_rule_payload=iot.CfnTopicRule.TopicRulePayloadProperty(
                 sql="SELECT *, timestamp() as received_at FROM 'device/+/data'",
                 description="Process sensor data from WIO Terminal devices and store in DynamoDB",
@@ -102,7 +103,7 @@ class InfraStack(Stack):
                 ],
                 error_action=iot.CfnTopicRule.ActionProperty(
                     cloudwatch_logs=iot.CfnTopicRule.CloudwatchLogsActionProperty(
-                        log_group_name="/aws/iot/rule/WioTerminalSensorDataRule/errors",
+                        log_group_name="/aws/iot/rule/attempt-iot-rule-sensor-data/errors",
                         role_arn=self.iot_rule_role.role_arn
                     )
                 )
@@ -114,7 +115,7 @@ class InfraStack(Stack):
             self, "SensorDataDatabase",
             catalog_id=self.account,
             database_input=glue.CfnDatabase.DatabaseInputProperty(
-                name="wio-terminal-sensor-database",
+                name="attempt-glue-database-sensor",
                 description="Database for WIO Terminal sensor data metadata"
             )
         )
@@ -122,6 +123,7 @@ class InfraStack(Stack):
         # IAM role for Glue Crawler
         self.glue_crawler_role = iam.Role(
             self, "GlueCrawlerRole",
+            role_name="attempt-iam-glue-crawler",
             assumed_by=iam.ServicePrincipal("glue.amazonaws.com"),
             description="IAM role for Glue Crawler to access DynamoDB and Data Catalog",
             managed_policies=[
@@ -135,7 +137,7 @@ class InfraStack(Stack):
         # AWS Glue Crawler for DynamoDB table metadata
         self.sensor_data_crawler = glue.CfnCrawler(
             self, "SensorDataCrawler",
-            name="wio-terminal-sensor-data-crawler",
+            name="attempt-glue-crawler-sensor-data",
             role=self.glue_crawler_role.role_arn,
             database_name=self.glue_database.ref,
             description="Crawler for WIO Terminal sensor data DynamoDB table",
@@ -159,7 +161,7 @@ class InfraStack(Stack):
         # S3 bucket for Athena query results
         self.athena_query_results_bucket = s3.Bucket(
             self, "AthenaQueryResultsBucket",
-            bucket_name=f"wio-terminal-athena-results-{self.account}-{self.region}",
+            bucket_name=f"attempt-s3-athena-results-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.DESTROY,
@@ -170,7 +172,7 @@ class InfraStack(Stack):
         # S3 bucket for Athena DynamoDB Connector spill data
         self.athena_spill_bucket = s3.Bucket(
             self, "AthenaSpillBucket",
-            bucket_name=f"wio-terminal-athena-spill-{self.account}-{self.region}",
+            bucket_name=f"attempt-s3-athena-spill-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.DESTROY,
@@ -186,7 +188,7 @@ class InfraStack(Stack):
                 semantic_version="2022.47.1"
             ),
             parameters={
-                "AthenaCatalogName": "wio-terminal-dynamodb-catalog",
+                "AthenaCatalogName": "attempt-athena-catalog-dynamodb",
                 "SpillBucket": self.athena_spill_bucket.bucket_name,
                 "LambdaMemory": "3008",
                 "LambdaTimeout": "900",
@@ -197,7 +199,7 @@ class InfraStack(Stack):
         # Athena WorkGroup for sensor data queries
         self.athena_workgroup = athena.CfnWorkGroup(
             self, "SensorDataWorkGroup",
-            name="wio-terminal-sensor-workgroup",
+            name="attempt-athena-workgroup-sensor",
             description="WorkGroup for querying WIO Terminal sensor data",
             work_group_configuration=athena.CfnWorkGroup.WorkGroupConfigurationProperty(
                 result_configuration=athena.CfnWorkGroup.ResultConfigurationProperty(
@@ -214,11 +216,11 @@ class InfraStack(Stack):
         # Athena Data Catalog for DynamoDB
         self.athena_data_catalog = athena.CfnDataCatalog(
             self, "DynamoDBDataCatalog",
-            name="wio-terminal-dynamodb-catalog",
+            name="attempt-athena-catalog-dynamodb",
             type="LAMBDA",
             description="Athena Data Catalog for DynamoDB sensor data",
             parameters={
-                "metadata-function": f"arn:aws:lambda:{self.region}:{self.account}:function:wio-terminal-dynamodb-catalog"
+                "metadata-function": f"arn:aws:lambda:{self.region}:{self.account}:function:attempt-athena-catalog-dynamodb"
             }
         )
 
@@ -230,8 +232,8 @@ class InfraStack(Stack):
         # This creates the data source configuration that can be used in QuickSight dashboards
         self.quicksight_data_source = quicksight.CfnDataSource(
             self, "QuickSightAthenaDataSource",
-            data_source_id="wio-terminal-athena-datasource",
-            name="WioTerminalSensorData",
+            data_source_id="attempt-quicksight-datasource-athena",
+            name="AttemptSensorData",
             type="ATHENA",
             aws_account_id=self.account,
             data_source_parameters=quicksight.CfnDataSource.DataSourceParametersProperty(
