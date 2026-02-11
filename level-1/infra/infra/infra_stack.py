@@ -109,6 +109,9 @@ class InfraStack(Stack):
                 )
             )
         )
+        
+        # Ensure the IoT Rule is created after the IAM policy is attached
+        self.sensor_data_rule.node.add_dependency(self.iot_rule_role)
 
         # Glue Database for Data Catalog
         self.glue_database = glue.CfnDatabase(
@@ -157,6 +160,9 @@ class InfraStack(Stack):
             ),
             configuration='{"Version":1.0,"CrawlerOutput":{"Partitions":{"AddOrUpdateBehavior":"InheritFromTable"},"Tables":{"AddOrUpdateBehavior":"MergeNewColumns"}}}'
         )
+        
+        # Ensure the crawler is created after the IAM policy is attached
+        self.sensor_data_crawler.node.add_dependency(self.glue_crawler_role)
 
         # S3 bucket for Athena query results
         self.athena_query_results_bucket = s3.Bucket(
@@ -180,22 +186,6 @@ class InfraStack(Stack):
             versioned=False,
         )
 
-        # Deploy Athena DynamoDB Connector from Serverless Application Repository
-        self.athena_dynamodb_connector = sam.CfnApplication(
-            self, "AthenaDynamoDBConnector",
-            location=sam.CfnApplication.ApplicationLocationProperty(
-                application_id="arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaDynamoDBConnector",
-                semantic_version="2022.47.1"
-            ),
-            parameters={
-                "AthenaCatalogName": "attempt-athena-catalog-dynamodb",
-                "SpillBucket": self.athena_spill_bucket.bucket_name,
-                "LambdaMemory": "3008",
-                "LambdaTimeout": "900",
-                "DisableSpillEncryption": "false"
-            }
-        )
-
         # Athena WorkGroup for sensor data queries
         self.athena_workgroup = athena.CfnWorkGroup(
             self, "SensorDataWorkGroup",
@@ -213,48 +203,63 @@ class InfraStack(Stack):
             )
         )
 
-        # Athena Data Catalog for DynamoDB
-        self.athena_data_catalog = athena.CfnDataCatalog(
-            self, "DynamoDBDataCatalog",
-            name="attempt-athena-catalog-dynamodb",
-            type="LAMBDA",
-            description="Athena Data Catalog for DynamoDB sensor data",
-            parameters={
-                "metadata-function": f"arn:aws:lambda:{self.region}:{self.account}:function:attempt-athena-catalog-dynamodb"
-            }
-        )
+        # Athena DynamoDB Connector - Commented out due to complexity
+        # Uncomment and configure after basic infrastructure is deployed
+        # self.athena_dynamodb_connector = sam.CfnApplication(
+        #     self, "AthenaDynamoDBConnector",
+        #     location=sam.CfnApplication.ApplicationLocationProperty(
+        #         application_id="arn:aws:serverlessrepo:us-east-1:292517598671:applications/AthenaDynamoDBConnector",
+        #         semantic_version="2022.47.1"
+        #     ),
+        #     parameters={
+        #         "AthenaCatalogName": "attempt-athena-catalog-dynamodb",
+        #         "SpillBucket": self.athena_spill_bucket.bucket_name,
+        #         "LambdaMemory": "3008",
+        #         "LambdaTimeout": "900",
+        #         "DisableSpillEncryption": "false"
+        #     }
+        # )
 
-        # Add dependency to ensure connector is deployed before data catalog
-        self.athena_data_catalog.add_dependency(self.athena_dynamodb_connector)
+        # Athena Data Catalog for DynamoDB - Commented out
+        # Requires proper Lambda function ARN from deployed connector
+        # self.athena_data_catalog = athena.CfnDataCatalog(
+        #     self, "DynamoDBDataCatalog",
+        #     name="attempt-athena-catalog-dynamodb",
+        #     type="LAMBDA",
+        #     description="Athena Data Catalog for DynamoDB sensor data",
+        #     parameters={
+        #         "metadata-function": f"arn:aws:lambda:{self.region}:{self.account}:function:attempt-athena-catalog-dynamodb"
+        #     }
+        # )
+        # self.athena_data_catalog.add_dependency(self.athena_dynamodb_connector)
 
         # QuickSight Data Source for Athena
         # Note: QuickSight requires manual setup for the first time (user/group creation)
-        # This creates the data source configuration that can be used in QuickSight dashboards
-        self.quicksight_data_source = quicksight.CfnDataSource(
-            self, "QuickSightAthenaDataSource",
-            data_source_id="attempt-quicksight-datasource-athena",
-            name="AttemptSensorData",
-            type="ATHENA",
-            aws_account_id=self.account,
-            data_source_parameters=quicksight.CfnDataSource.DataSourceParametersProperty(
-                athena_parameters=quicksight.CfnDataSource.AthenaParametersProperty(
-                    work_group=self.athena_workgroup.name
-                )
-            ),
-            permissions=[
-                quicksight.CfnDataSource.ResourcePermissionProperty(
-                    principal=f"arn:aws:quicksight:{self.region}:{self.account}:user/default/Admin",
-                    actions=[
-                        "quicksight:DescribeDataSource",
-                        "quicksight:DescribeDataSourcePermissions",
-                        "quicksight:PassDataSource",
-                        "quicksight:UpdateDataSource",
-                        "quicksight:DeleteDataSource",
-                        "quicksight:UpdateDataSourcePermissions"
-                    ]
-                )
-            ]
-        )
-
-        # Add dependency to ensure Athena workgroup is created first
-        self.quicksight_data_source.add_dependency(self.athena_workgroup)
+        # Commented out because QuickSight needs to be enabled in the AWS account first
+        # Uncomment and deploy after setting up QuickSight in the AWS Console
+        # self.quicksight_data_source = quicksight.CfnDataSource(
+        #     self, "QuickSightAthenaDataSource",
+        #     data_source_id="attempt-quicksight-datasource-athena",
+        #     name="AttemptSensorData",
+        #     type="ATHENA",
+        #     aws_account_id=self.account,
+        #     data_source_parameters=quicksight.CfnDataSource.DataSourceParametersProperty(
+        #         athena_parameters=quicksight.CfnDataSource.AthenaParametersProperty(
+        #             work_group=self.athena_workgroup.name
+        #         )
+        #     ),
+        #     permissions=[
+        #         quicksight.CfnDataSource.ResourcePermissionProperty(
+        #             principal=f"arn:aws:quicksight:{self.region}:{self.account}:user/default/Admin",
+        #             actions=[
+        #                 "quicksight:DescribeDataSource",
+        #                 "quicksight:DescribeDataSourcePermissions",
+        #                 "quicksight:PassDataSource",
+        #                 "quicksight:UpdateDataSource",
+        #                 "quicksight:DeleteDataSource",
+        #                 "quicksight:UpdateDataSourcePermissions"
+        #             ]
+        #         )
+        #     ]
+        # )
+        # self.quicksight_data_source.add_dependency(self.athena_workgroup)
